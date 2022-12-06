@@ -75,8 +75,8 @@ func azureProvider() *schema.Provider {
 				Type:         schema.TypeString,
 				Required:     true,
 				DefaultFunc:  schema.EnvDefaultFunc("ARM_ENVIRONMENT", "public"),
-				ValidateFunc: validation.StringInSlice([]string{"public", "usgovernment", "china"}, true),
-				Description:  "The Cloud Environment which should be used. Possible values are public, usgovernment and china. Defaults to public.",
+				ValidateFunc: validation.StringInSlice([]string{"public", "usgovernment", "china", "german"}, true),
+				Description:  "The Cloud Environment which should be used. Possible values are public, usgovernment, german and china. Defaults to public.",
 			},
 
 			// TODO@mgd: the metadata_host is used to retrieve metadata from Azure to identify current environment, this is used to eliminate Azure Stack usage, in which case the provider doesn't support.
@@ -188,6 +188,17 @@ func providerConfigure(p *schema.Provider) schema.ConfigureContextFunc {
 			cloudConfig = cloud.AzureGovernment
 		case "china":
 			cloudConfig = cloud.AzureChina
+		case "german":
+			// TODO: replace the following 3 URLs
+			azureGerman := cloud.Configuration{
+				ActiveDirectoryAuthorityHost: "https://login.microsoftonline.com/",
+				Services:                     map[cloud.ServiceName]cloud.ServiceConfiguration{},
+			}
+			azureGerman.Services[cloud.ResourceManager] = cloud.ServiceConfiguration{
+				Audience: "https://management.core.windows.net/",
+				Endpoint: "https://management.azure.com",
+			}
+			cloudConfig = azureGerman
 		default:
 			return nil, diag.Errorf("unknown `environment` specified: %q", env)
 		}
