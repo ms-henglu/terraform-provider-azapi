@@ -3,6 +3,11 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"os"
 	"strings"
 	"sync"
@@ -17,14 +22,188 @@ import (
 	"github.com/Azure/terraform-provider-azapi/internal/features"
 	"github.com/Azure/terraform-provider-azapi/internal/services"
 	"github.com/Azure/terraform-provider-azapi/version"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/meta"
 )
 
-func AzureProvider() *schema.Provider {
-	return azureProvider()
+func AzureProvider() provider.Provider {
+	return &Provider{}
+}
+
+type Provider struct {
+}
+
+func (p Provider) Metadata(ctx context.Context, request provider.MetadataRequest, response *provider.MetadataResponse) {
+	response.TypeName = "azapi"
+}
+
+func (p Provider) Schema(ctx context.Context, request provider.SchemaRequest, response *provider.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Description:         "TODO",
+		MarkdownDescription: "TODO",
+		Attributes: map[string]schema.Attribute{
+			"subscription_id": schema.StringAttribute{
+				Description:         "The Subscription ID which should be used.",
+				MarkdownDescription: "The Subscription ID which should be used.",
+				Optional:            true,
+			},
+
+			"client_id": schema.StringAttribute{
+				Optional:            true,
+				Description:         "The Client ID which should be used.",
+				MarkdownDescription: "The Client ID which should be used.",
+			},
+
+			"tenant_id": schema.StringAttribute{
+				Optional:            true,
+				Description:         "The Tenant ID which should be used.",
+				MarkdownDescription: "The Client ID which should be used.",
+			},
+
+			// TODO@mgd: this is blocked by https://github.com/Azure/azure-sdk-for-go/issues/17159
+			// "auxiliary_tenant_ids": {
+			// 	Type:     schema.TypeList,
+			// 	Optional: true,
+			// 	MaxItems: 3,
+			// 	Elem: &schema.Schema{
+			// 		Type: schema.TypeString,
+			// 	},
+			// },
+
+			"environment": schema.StringAttribute{
+				Required: true,
+				Validators: []validator.String{
+					stringvalidator.OneOfCaseInsensitive(
+						"public",
+						"usgovernment",
+						"china",
+					),
+				},
+				Description:         "The Cloud Environment which should be used. Possible values are public, usgovernment and china. Defaults to public.",
+				MarkdownDescription: "The Cloud Environment which should be used. Possible values are public, usgovernment and china. Defaults to public.",
+			},
+
+			// TODO@mgd: the metadata_host is used to retrieve metadata from Azure to identify current environment, this is used to eliminate Azure Stack usage, in which case the provider doesn't support.
+			// "metadata_host": {
+			// 	Type:        schema.TypeString,
+			// 	Required:    true,
+			// 	DefaultFunc: schema.EnvDefaultFunc("ARM_METADATA_HOSTNAME", ""),
+			// 	Description: "The Hostname which should be used for the Azure Metadata Service.",
+			// },
+
+			// Client Certificate specific fields
+			"client_certificate_path": schema.StringAttribute{
+				Optional:            true,
+				Description:         "The path to the Client Certificate associated with the Service Principal for use when authenticating as a Service Principal using a Client Certificate.",
+				MarkdownDescription: "The path to the Client Certificate associated with the Service Principal for use when authenticating as a Service Principal using a Client Certificate.",
+			},
+
+			// TODO@mgd: this depends on https://github.com/Azure/azure-sdk-for-go/pull/17099
+			// "client_certificate_password": {
+			// 	Type:        schema.TypeString,
+			// 	Optional:    true,
+			// 	DefaultFunc: schema.EnvDefaultFunc("ARM_CLIENT_CERTIFICATE_PASSWORD", ""),
+			// 	Description: "The password associated with the Client Certificate. For use when authenticating as a Service Principal using a Client Certificate",
+			// },
+
+			// Client Secret specific fields
+			"client_secret": schema.StringAttribute{
+				Optional:            true,
+				Description:         "The Client Secret which should be used. For use When authenticating as a Service Principal using a Client Secret.",
+				MarkdownDescription: "The Client Secret which should be used. For use When authenticating as a Service Principal using a Client Secret.",
+			},
+
+			"skip_provider_registration": schema.BoolAttribute{
+				Optional:            true,
+				Description:         "Should the Provider skip registering all of the Resource Providers that it supports, if they're not already registered?",
+				MarkdownDescription: "Should the Provider skip registering all of the Resource Providers that it supports, if they're not already registered?",
+			},
+
+			// TODO@mgd: azidentity doesn't support msi_endpoint
+			// // Managed Service Identity specific fields
+			// "use_msi": {
+			// 	Type:        schema.TypeBool,
+			// 	Optional:    true,
+			// 	DefaultFunc: schema.EnvDefaultFunc("ARM_USE_MSI", false),
+			// 	Description: "Allowed Managed Service Identity be used for Authentication.",
+			// },
+			// "msi_endpoint": {
+			// 	Type:        schema.TypeString,
+			// 	Optional:    true,
+			// 	DefaultFunc: schema.EnvDefaultFunc("ARM_MSI_ENDPOINT", ""),
+			// 	Description: "The path to a custom endpoint for Managed Service Identity - in most circumstances this should be detected automatically. ",
+			// },
+
+			// Managed Tracking GUID for User-agent
+			"partner_id": schema.StringAttribute{
+				Optional: true,
+				Validators: []validator.String{
+					stringvalidator.Any(
+						//stringvalidator.OneOf()
+					),
+				},
+				Description:         "A GUID/UUID that is registered with Microsoft to facilitate partner resource usage attribution.",
+				MarkdownDescription: "A GUID/UUID that is registered with Microsoft to facilitate partner resource usage attribution.",
+			},
+
+			"disable_correlation_request_id": schema.BoolAttribute{
+				Optional:            true,
+				Description:         "This will disable the x-ms-correlation-request-id header.",
+				MarkdownDescription: "This will disable the x-ms-correlation-request-id header.",
+			},
+
+			"disable_terraform_partner_id": schema.BoolAttribute{
+				Optional:            true,
+				Description:         "This will disable the Terraform Partner ID which is used if a custom `partner_id` isn't specified.",
+				MarkdownDescription: "This will disable the Terraform Partner ID which is used if a custom `partner_id` isn't specified.",
+			},
+
+			"default_location": schema.StringAttribute{
+				Optional: true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
+			},
+
+			"default_tags": schema.MapAttribute{
+				ElementType:         nil,
+				CustomType:          nil,
+				Required:            false,
+				Optional:            false,
+				Sensitive:           false,
+				Description:         "",
+				MarkdownDescription: "",
+				DeprecationMessage:  "",
+				Validators:          nil,
+			},
+		},
+	}
+}
+
+func (p Provider) Configure(ctx context.Context, request provider.ConfigureRequest, response *provider.ConfigureResponse) {
+	//TODO implement me
+	panic("implement me")
+	request.Config.Get()
+}
+
+func (p Provider) DataSources(ctx context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		func() datasource.DataSource {
+		},
+	}
+}
+
+func (p Provider) Resources(ctx context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		func() resource.Resource {
+			return nil
+		},
+		func() resource.Resource {
+			return nil
+		},
+	}
 }
 
 func azureProvider() *schema.Provider {

@@ -1,14 +1,13 @@
 package location
 
 import (
-	"strings"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"strings"
 )
 
-func SchemaLocationOC() *schema.Schema {
-	return &schema.Schema{
+func SchemaLocationOC() *schema.Attribute {
+	return &schema.StringAttribute{
 		Type:             schema.TypeString,
 		Optional:         true,
 		ForceNew:         true,
