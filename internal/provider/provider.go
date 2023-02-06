@@ -42,8 +42,8 @@ func (p Provider) Metadata(ctx context.Context, request provider.MetadataRequest
 
 func (p Provider) Schema(ctx context.Context, request provider.SchemaRequest, response *provider.SchemaResponse) {
 	response.Schema = schema.Schema{
-		Description:         "TODO",
-		MarkdownDescription: "TODO",
+		Description:         "Terraform provider for Azure Resource Manager Rest API",
+		MarkdownDescription: "Terraform provider for Azure Resource Manager Rest API",
 		Attributes: map[string]schema.Attribute{
 			"subscription_id": schema.StringAttribute{
 				Description:         "The Subscription ID which should be used.",
@@ -142,7 +142,7 @@ func (p Provider) Schema(ctx context.Context, request provider.SchemaRequest, re
 				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.Any(
-						//stringvalidator.OneOf()
+					//stringvalidator.OneOf()
 					),
 				},
 				Description:         "A GUID/UUID that is registered with Microsoft to facilitate partner resource usage attribution.",
