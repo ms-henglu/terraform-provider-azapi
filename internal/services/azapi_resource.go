@@ -4,6 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	myValidator "github.com/Azure/terraform-provider-azapi/internal/validator"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"log"
 	"net/url"
 	"reflect"
@@ -17,14 +24,170 @@ import (
 	"github.com/Azure/terraform-provider-azapi/internal/azure/tags"
 	"github.com/Azure/terraform-provider-azapi/internal/clients"
 	"github.com/Azure/terraform-provider-azapi/internal/locks"
+	myplanmodifier "github.com/Azure/terraform-provider-azapi/internal/planmodifier"
 	"github.com/Azure/terraform-provider-azapi/internal/services/parse"
 	"github.com/Azure/terraform-provider-azapi/internal/services/validate"
 	"github.com/Azure/terraform-provider-azapi/internal/tf"
 	"github.com/Azure/terraform-provider-azapi/utils"
 	"github.com/hashicorp/go-cty/cty"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
+
+type AzapiResource struct {
+	ProviderData clients.Client
+}
+
+func (a AzapiResource) ModifyPlan(ctx context.Context, request resource.ModifyPlanRequest, response *resource.ModifyPlanResponse) {
+	//if request.Plan
+	response.Plan.
+}
+
+func (a AzapiResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	if v, ok := request.ProviderData.(*clients.Client); ok && v != nil {
+		a.ProviderData = *v
+	}
+}
+
+func (a AzapiResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_resource"
+}
+
+func (a AzapiResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+
+			"name": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+
+			"parent_id": schema.StringAttribute{
+				Required: true,
+				Validators: []validator.String{
+					validate.StringIsResourceID(),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+
+			"type": schema.StringAttribute{
+				Required: true,
+				Validators: []validator.String{
+					validate.StringIsResourceType(),
+				},
+			},
+
+			"location": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					location.NormalizeLocation(),
+				},
+			},
+
+			"identity": identity.SchemaIdentity(),
+
+			"body": schema.StringAttribute{
+				Optional: true,
+				//Default:          "{}",
+				//DiffSuppressFunc: tf.SuppressJsonOrderingDifference,
+				PlanModifiers: []planmodifier.String{},
+				Validators: []validator.String{
+					myValidator.StringIsJSON(),
+				},
+			},
+
+			"ignore_casing": schema.BoolAttribute{
+				Optional: true,
+				PlanModifiers: []planmodifier.Bool{
+					myplanmodifier.DefaultAttribute(types.BoolValue(false)),
+				},
+			},
+
+			"ignore_missing_property": schema.BoolAttribute{
+				Optional: true,
+				PlanModifiers: []planmodifier.Bool{
+					myplanmodifier.DefaultAttribute(types.BoolValue(true)),
+				},
+			},
+
+			"response_export_values": schema.ListAttribute{
+				Optional: true,
+				ElementType: types.ListType{
+					ElemType: types.StringType,
+				},
+				// TODO@ms-henglu： validate each element in this list: not empty
+			},
+
+			"locks": schema.ListAttribute{
+				Optional: true,
+				ElementType: types.ListType{
+					ElemType: types.StringType,
+				},
+				// TODO@ms-henglu： validate each element in this list: not empty
+			},
+
+			"removing_special_chars": schema.BoolAttribute{
+				Optional: true,
+				PlanModifiers: []planmodifier.Bool{
+					myplanmodifier.DefaultAttribute(types.BoolValue(false)),
+				},
+			},
+
+			"schema_validation_enabled": schema.BoolAttribute{
+				Optional: true,
+				PlanModifiers: []planmodifier.Bool{
+					myplanmodifier.DefaultAttribute(types.BoolValue(true)),
+				},
+			},
+
+			"output": schema.StringAttribute{
+				Computed: true,
+			},
+
+			"tags": schema.MapAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators: []validator.Map{
+					tags.Validator(),
+				},
+			},
+		},
+	}
+}
+
+func (a AzapiResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
+
+}
+
+func (a AzapiResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (a AzapiResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (a AzapiResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+var _ resource.Resource = &AzapiResource{}
+var _ resource.ResourceWithConfigure = &AzapiResource{}
+var _ resource.ResourceWithModifyPlan = &AzapiResource{}
 
 func ResourceAzApiResource() *schema.Resource {
 	return &schema.Resource{

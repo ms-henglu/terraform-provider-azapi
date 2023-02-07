@@ -2,11 +2,14 @@ package identity
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"strings"
 
 	"github.com/Azure/terraform-provider-azapi/internal/services/parse"
 	"github.com/Azure/terraform-provider-azapi/internal/services/validate"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
@@ -19,7 +22,7 @@ const (
 	SystemAssignedUserAssigned IdentityType = "SystemAssigned, UserAssigned"
 )
 
-func SchemaIdentity() *schema.Schema {
+func SchemaIdentity1() *schema.Schema {
 	return &schema.Schema{
 		Type:     schema.TypeList,
 		Optional: true,
@@ -56,6 +59,42 @@ func SchemaIdentity() *schema.Schema {
 					Type:     schema.TypeString,
 					Computed: true,
 				},
+			},
+		},
+	}
+}
+
+func SchemaIdentity() *schema.SingleNestedAttribute {
+	return &schema.SingleNestedAttribute{
+		Optional: true,
+		Attributes: map[string]schema.Attribute{
+			"type": schema.StringAttribute{
+				Required: true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(
+						string(None),
+						string(UserAssigned),
+						string(SystemAssigned),
+						string(SystemAssignedUserAssigned),
+					),
+				},
+			},
+
+			"identity_ids": schema.ListAttribute{
+				Optional: true,
+				ElementType: types.ListType{
+					ElemType: types.StringType,
+				},
+				Validators: []validator.List{},
+				// TODO@ms-henglu： validate each element in this list
+			},
+
+			"principal_id": schema.StringAttribute{
+				Computed: true,
+			},
+
+			"tenant_id": schema.StringAttribute{
+				Computed: true,
 			},
 		},
 	}

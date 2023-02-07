@@ -1,7 +1,9 @@
 package validate
 
 import (
+	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"regexp"
 	"strings"
 
@@ -51,4 +53,66 @@ func ResourceType(i interface{}, k string) ([]string, []error) {
 	}
 
 	return nil, nil
+}
+
+type stringIsResourceID struct{}
+
+func (v stringIsResourceID) Description(ctx context.Context) string {
+	return "validate this in resource ID format"
+}
+
+func (v stringIsResourceID) MarkdownDescription(ctx context.Context) string {
+	return "validate this in resource ID format"
+}
+
+func (_ stringIsResourceID) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	str := req.ConfigValue
+
+	if str.IsUnknown() || str.IsNull() {
+		return
+	}
+
+	if _, errs := ResourceID(str.ValueString(), req.Path.String()); len(errs) != 0 {
+		for _, err := range errs {
+			resp.Diagnostics.AddAttributeError(
+				req.Path,
+				"Invalid Resource ID",
+				err.Error())
+		}
+	}
+}
+
+func StringIsResourceID() stringIsResourceID {
+	return stringIsResourceID{}
+}
+
+type stringIsResourceType struct{}
+
+func (v stringIsResourceType) Description(ctx context.Context) string {
+	return "validate this in resource type format"
+}
+
+func (v stringIsResourceType) MarkdownDescription(ctx context.Context) string {
+	return "validate this in resource type format"
+}
+
+func (_ stringIsResourceType) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	str := req.ConfigValue
+
+	if str.IsUnknown() || str.IsNull() {
+		return
+	}
+
+	if _, errs := ResourceType(str.ValueString(), req.Path.String()); len(errs) != 0 {
+		for _, err := range errs {
+			resp.Diagnostics.AddAttributeError(
+				req.Path,
+				"Invalid Resource Type",
+				err.Error())
+		}
+	}
+}
+
+func StringIsResourceType() stringIsResourceType {
+	return stringIsResourceType{}
 }
