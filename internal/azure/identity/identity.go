@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/Azure/terraform-provider-azapi/internal/services/parse"
-	"github.com/Azure/terraform-provider-azapi/internal/services/validate"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 type IdentityType string
@@ -21,48 +19,6 @@ const (
 	UserAssigned               IdentityType = "UserAssigned"
 	SystemAssignedUserAssigned IdentityType = "SystemAssigned, UserAssigned"
 )
-
-func SchemaIdentity1() *schema.Schema {
-	return &schema.Schema{
-		Type:     schema.TypeList,
-		Optional: true,
-		Computed: true,
-		MaxItems: 1,
-		Elem: &schema.Resource{
-			Schema: map[string]*schema.Schema{
-				"type": {
-					Type:     schema.TypeString,
-					Required: true,
-					ValidateFunc: validation.StringInSlice([]string{
-						string(None),
-						string(UserAssigned),
-						string(SystemAssigned),
-						string(SystemAssignedUserAssigned),
-					}, false),
-				},
-
-				"identity_ids": {
-					Type:     schema.TypeList,
-					Optional: true,
-					Elem: &schema.Schema{
-						Type:         schema.TypeString,
-						ValidateFunc: validate.UserAssignedIdentityID,
-					},
-				},
-
-				"principal_id": {
-					Type:     schema.TypeString,
-					Computed: true,
-				},
-
-				"tenant_id": {
-					Type:     schema.TypeString,
-					Computed: true,
-				},
-			},
-		},
-	}
-}
 
 func SchemaIdentity() *schema.SingleNestedAttribute {
 	return &schema.SingleNestedAttribute{
@@ -95,41 +51,6 @@ func SchemaIdentity() *schema.SingleNestedAttribute {
 
 			"tenant_id": schema.StringAttribute{
 				Computed: true,
-			},
-		},
-	}
-}
-
-func SchemaIdentityDataSource() *schema.Schema {
-	return &schema.Schema{
-		Type:     schema.TypeList,
-		Optional: true,
-		Computed: true,
-		MaxItems: 1,
-		Elem: &schema.Resource{
-			Schema: map[string]*schema.Schema{
-				"type": {
-					Type:     schema.TypeString,
-					Computed: true,
-				},
-
-				"identity_ids": {
-					Type:     schema.TypeList,
-					Computed: true,
-					Elem: &schema.Schema{
-						Type: schema.TypeString,
-					},
-				},
-
-				"principal_id": {
-					Type:     schema.TypeString,
-					Computed: true,
-				},
-
-				"tenant_id": {
-					Type:     schema.TypeString,
-					Computed: true,
-				},
 			},
 		},
 	}

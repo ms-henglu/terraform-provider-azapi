@@ -2,15 +2,16 @@ package acceptance
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"os"
 	"testing"
 
 	"github.com/Azure/terraform-provider-azapi/internal/clients"
 	"github.com/Azure/terraform-provider-azapi/internal/provider"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
 
 const (
@@ -98,17 +99,14 @@ func (td TestData) ResourceTest(t *testing.T, testResource TestResource, steps [
 
 func (td TestData) runAcceptanceTest(t *testing.T, testCase resource.TestCase) {
 	testCase.ExternalProviders = td.externalProviders()
-	testCase.ProviderFactories = td.providers()
+	testCase.ProtoV6ProviderFactories = td.providers()
 
 	resource.ParallelTest(t, testCase)
 }
 
-func (td TestData) providers() map[string]func() (*schema.Provider, error) {
-	return map[string]func() (*schema.Provider, error){
-		"azapi": func() (*schema.Provider, error) { //nolint:unparam
-			azapi := provider.AzureProvider()
-			return azapi, nil
-		},
+func (td TestData) providers() map[string]func() (tfprotov6.ProviderServer, error) {
+	return map[string]func() (tfprotov6.ProviderServer, error){
+		"azapi": providerserver.NewProtocol6WithError(provider.AzureProvider()),
 	}
 }
 

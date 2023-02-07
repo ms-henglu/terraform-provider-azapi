@@ -97,7 +97,7 @@ func (p Provider) Schema(ctx context.Context, request provider.SchemaRequest, re
 			// },
 
 			"environment": schema.StringAttribute{
-				Required: true,
+				Optional: true,
 				//DefaultFunc:  schema.EnvDefaultFunc("ARM_ENVIRONMENT", "public"),
 				Validators: []validator.String{
 					stringvalidator.OneOfCaseInsensitive(
@@ -285,6 +285,8 @@ func (p Provider) Configure(ctx context.Context, request provider.ConfigureReque
 	if config.Environment.IsNull() {
 		if v := os.Getenv("ARM_ENVIRONMENT"); v != "" {
 			config.Environment = types.StringValue(v)
+		} else {
+			config.Environment = types.StringValue("public")
 		}
 	}
 	if config.ClientCertificatePath.IsNull() {
