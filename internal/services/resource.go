@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"log"
 	"strings"
 
@@ -63,9 +64,9 @@ func isResourceHasProperty(resourceDef *types.ResourceType, property string) boo
 	return false
 }
 
-func flattenOutput(responseBody interface{}, paths []interface{}) string {
+func flattenOutput(responseBody interface{}, paths []attr.Value) string {
 	for _, path := range paths {
-		if path == "*" {
+		if path.String() == "*" {
 			if v, ok := responseBody.(string); ok {
 				return v
 			}
@@ -77,7 +78,7 @@ func flattenOutput(responseBody interface{}, paths []interface{}) string {
 	var output interface{}
 	output = make(map[string]interface{})
 	for _, path := range paths {
-		part := utils.ExtractObject(responseBody, path.(string))
+		part := utils.ExtractObject(responseBody, path.String())
 		if part == nil {
 			continue
 		}

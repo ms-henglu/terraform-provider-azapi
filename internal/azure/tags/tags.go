@@ -89,9 +89,16 @@ func ExpandTags(tagsMap map[string]interface{}) map[string]string {
 	return output
 }
 
-func FlattenTags(input interface{}) map[string]interface{} {
-	if input != nil {
-		return input.(map[string]interface{})
+func FlattenTags(raw interface{}) map[string]attr.Value {
+	if raw == nil {
+		return nil
+	}
+	if input, ok := raw.(map[string]interface{}); ok {
+		out := make(map[string]attr.Value)
+		for k, v := range input {
+			out[k] = types.StringValue(v.(string))
+		}
+		return out
 	}
 	return nil
 }
