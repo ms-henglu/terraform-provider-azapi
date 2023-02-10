@@ -77,33 +77,21 @@ func TagValueToString(v interface{}) (string, error) {
 	}
 }
 
-func ExpandTags(tagsMap map[string]interface{}) map[string]string {
-	output := make(map[string]string, len(tagsMap))
-
-	for i, v := range tagsMap {
-		// Validate should have ignored this error already
-		value, _ := TagValueToString(v)
-		output[i] = value
-	}
-
-	return output
-}
-
-func FlattenTags(raw interface{}) map[string]attr.Value {
+func FlattenTags(raw interface{}) types.Map {
 	if raw == nil {
-		return nil
+		return types.MapNull(types.StringType)
 	}
 	if input, ok := raw.(map[string]interface{}); ok {
 		out := make(map[string]attr.Value)
 		for k, v := range input {
 			out[k] = types.StringValue(v.(string))
 		}
-		return out
+		return types.MapValueMust(types.StringType, out)
 	}
-	return nil
+	return types.MapNull(types.StringType)
 }
 
-func ExpandTags2(value types.Map) map[string]string {
+func ExpandTags(value types.Map) map[string]string {
 	tagsMap := make(map[string]interface{})
 	if diags := value.ElementsAs(context.TODO(), &tagsMap, false); diags.HasError() {
 		return nil

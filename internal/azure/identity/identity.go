@@ -23,12 +23,18 @@ const (
 	SystemAssignedUserAssigned IdentityType = "SystemAssigned, UserAssigned"
 )
 
-func SchemaIdentity() *schema.SingleNestedAttribute {
-	return &schema.SingleNestedAttribute{
-		Optional: true,
+type Model struct {
+	Type        types.String `tfsdk:"type"`
+	IdentityIDs types.List   `tfsdk:"identity_ids"`
+	PrincipalID types.String `tfsdk:"principal_id"`
+	TenantID    types.String `tfsdk:"tenant_id"`
+}
+
+func SchemaIdentity() *schema.SingleNestedBlock {
+	return &schema.SingleNestedBlock{
 		Attributes: map[string]schema.Attribute{
 			"type": schema.StringAttribute{
-				Required: true,
+				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(
 						string(None),
@@ -40,11 +46,9 @@ func SchemaIdentity() *schema.SingleNestedAttribute {
 			},
 
 			"identity_ids": schema.ListAttribute{
-				Optional: true,
-				ElementType: types.ListType{
-					ElemType: types.StringType,
-				},
-				Validators: []validator.List{},
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators:  []validator.List{},
 				// TODO@ms-henglu： validate each element in this list
 			},
 
@@ -59,48 +63,24 @@ func SchemaIdentity() *schema.SingleNestedAttribute {
 	}
 }
 
-func ExpandIdentity(input []interface{}) (interface{}, error) {
-	if len(input) == 0 || input[0] == nil {
-		return nil, nil
-	}
-
-	v := input[0].(map[string]interface{})
-
-	config := map[string]interface{}{}
-	identityType := IdentityType(v["type"].(string))
-	config["type"] = identityType
-	identityIds := v["identity_ids"].([]interface{})
-	userAssignedIdentities := make(map[string]interface{}, len(identityIds))
-	if len(identityIds) != 0 {
-		if identityType != UserAssigned && identityType != SystemAssignedUserAssigned {
-			return nil, fmt.Errorf("`identity_ids` can only be specified when `type` includes `UserAssigned`")
-		}
-		for _, id := range identityIds {
-			userAssignedIdentities[id.(string)] = make(map[string]interface{})
-		}
-		config["userAssignedIdentities"] = userAssignedIdentities
-	}
-	return config, nil
-}
-
-func ExpandIdentity2(raw types.Object) (interface{}, error) {
-	input := make(map[string]interface{})
+func ExpandIdentity(raw types.Object) (interface{}, error) {
+	var input Model
 	diags := raw.As(context.TODO(), &input, basetypes.ObjectAsOptions{})
 	if diags.HasError() {
 		return nil, fmt.Errorf("%+v", diags)
 	}
 
 	config := map[string]interface{}{}
-	identityType := IdentityType(input["type"].(string))
+	identityType := IdentityType(input.Type.ValueString())
 	config["type"] = identityType
-	identityIds := input["identity_ids"].([]interface{})
+	identityIds := input.IdentityIDs.Elements()
 	userAssignedIdentities := make(map[string]interface{}, len(identityIds))
 	if len(identityIds) != 0 {
 		if identityType != UserAssigned && identityType != SystemAssignedUserAssigned {
 			return nil, fmt.Errorf("`identity_ids` can only be specified when `type` includes `UserAssigned`")
 		}
 		for _, id := range identityIds {
-			userAssignedIdentities[id.(string)] = make(map[string]interface{})
+			userAssignedIdentities[id.(types.String).ValueString()] = make(map[string]interface{})
 		}
 		config["userAssignedIdentities"] = userAssignedIdentities
 	}
@@ -116,9 +96,9 @@ func AttributeTypes() map[string]attr.Type {
 	return out
 }
 
-func FlattenIdentity(identity interface{}) map[string]attr.Value {
+func FlattenIdentity(identity interface{}) types.Object {
 	if identity == nil {
-		return nil
+		return types.ObjectNull(AttributeTypes())
 	}
 	if identityMap, ok := identity.(map[string]interface{}); ok {
 		identityIds := make([]attr.Value, 0)
@@ -144,12 +124,19 @@ func FlattenIdentity(identity interface{}) map[string]attr.Value {
 			identityType = string(None)
 		}
 
-		return map[string]attr.Value{
+		out := map[string]attr.Value{
 			"type":         types.StringValue(identityType),
 			"identity_ids": types.ListValueMust(types.StringType, identityIds),
-			"principal_id": types.StringValue(identityMap["principalId"].(string)),
-			"tenant_id":    types.StringValue(identityMap["tenantId"].(string)),
+			"principal_id": types.StringNull(),
+			"tenant_id":    types.StringNull(),
 		}
+		if principalId := identityMap["principalId"].(string); principalId != "" {
+			out["principal_id"] = types.StringValue(principalId)
+		}
+		if tenantId := identityMap["tenantId"].(string); tenantId != "" {
+			out["tenant_id"] = types.StringValue(tenantId)
+		}
+		return types.ObjectValueMust(AttributeTypes(), out)
 	}
-	return nil
+	return types.ObjectNull(AttributeTypes())
 }

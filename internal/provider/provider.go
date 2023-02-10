@@ -12,7 +12,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/terraform-provider-azapi/internal/azure"
-	"github.com/Azure/terraform-provider-azapi/internal/azure/location"
 	"github.com/Azure/terraform-provider-azapi/internal/azure/tags"
 	"github.com/Azure/terraform-provider-azapi/internal/clients"
 	"github.com/Azure/terraform-provider-azapi/internal/features"
@@ -412,8 +411,8 @@ func (p Provider) Configure(ctx context.Context, request provider.ConfigureReque
 		CloudCfg:             cloudConfig,
 		ApplicationUserAgent: buildUserAgent(request.TerraformVersion, config.PartnerID.ValueString(), config.DisableTerraformPartnerID.ValueBool()),
 		Features: features.UserFeatures{
-			DefaultTags:         tags.ExpandTags2(config.DefaultTags),
-			DefaultLocation:     location.Normalize(config.DefaultName.ValueString()),
+			DefaultTags:         config.DefaultTags,
+			DefaultLocation:     config.DefaultLocation,
 			DefaultNaming:       config.DefaultName.ValueString(),
 			DefaultNamingPrefix: config.DefaultNamingPrefix.ValueString(),
 			DefaultNamingSuffix: config.DefaultNamingSuffix.ValueString(),

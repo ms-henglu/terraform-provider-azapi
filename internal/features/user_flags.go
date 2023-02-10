@@ -1,8 +1,12 @@
 package features
 
+import (
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
 type UserFeatures struct {
-	DefaultTags         map[string]string
-	DefaultLocation     string
+	DefaultTags         types.Map
+	DefaultLocation     types.String
 	DefaultNaming       string
 	DefaultNamingPrefix string
 	DefaultNamingSuffix string
@@ -11,8 +15,8 @@ type UserFeatures struct {
 
 func Default() UserFeatures {
 	return UserFeatures{
-		DefaultTags:         nil,
-		DefaultLocation:     "",
+		DefaultTags:         types.MapNull(types.StringType),
+		DefaultLocation:     types.StringNull(),
 		DefaultNaming:       "",
 		DefaultNamingPrefix: "",
 		DefaultNamingSuffix: "",

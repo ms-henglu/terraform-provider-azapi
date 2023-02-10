@@ -46,6 +46,21 @@ func (m DefaultAttributePlanModifier) PlanModifyBool(ctx context.Context, req pl
 	resp.PlanValue = m.Default.(types.Bool)
 }
 
+func (m DefaultAttributePlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// if configuration was provided, then don't use the default
+	if !req.ConfigValue.IsNull() {
+		return
+	}
+
+	// If the plan is known and not null (for example due to another plan modifier),
+	// don't set the default value
+	if !req.PlanValue.IsUnknown() && !req.PlanValue.IsNull() {
+		return
+	}
+
+	resp.PlanValue = m.Default.(types.String)
+}
+
 func (m DefaultAttributePlanModifier) Description(ctx context.Context) string {
 	return "Use a static default value for an attribute"
 }

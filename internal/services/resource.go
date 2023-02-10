@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"log"
 	"strings"
 
@@ -12,11 +13,12 @@ import (
 	"github.com/Azure/terraform-provider-azapi/utils"
 )
 
-func schemaValidation(azureResourceType, apiVersion string, resourceDef *types.ResourceType, body interface{}) error {
+func validateBodySchema(azureResourceType, apiVersion string, resourceDef *types.ResourceType, body interface{}, diagnostics *diag.Diagnostics) {
 	log.Printf("[INFO] prepare validation for resource type: %s, api-version: %s", azureResourceType, apiVersion)
 	versions := azure.GetApiVersions(azureResourceType)
 	if len(versions) == 0 {
-		return schemaValidationError(fmt.Sprintf("the `type` is invalid.\n resource type %s can't be found.\n", azureResourceType))
+		diagnostics.AddError("Validation", schemaValidationError(fmt.Sprintf("the `type` is invalid.\n resource type %s can't be found.\n", azureResourceType)).Error())
+		return
 	}
 	isVersionValid := false
 	for _, version := range versions {
@@ -26,7 +28,8 @@ func schemaValidation(azureResourceType, apiVersion string, resourceDef *types.R
 		}
 	}
 	if !isVersionValid {
-		return schemaValidationError(fmt.Sprintf("the `type`'s api-version is invalid.\n The supported versions are [%s].\n", strings.Join(versions, ", ")))
+		diagnostics.AddError("Validation", schemaValidationError(fmt.Sprintf("the `type`'s api-version is invalid.\n The supported versions are [%s].\n", strings.Join(versions, ", "))).Error())
+		return
 	}
 
 	if resourceDef != nil {
@@ -36,10 +39,9 @@ func schemaValidation(azureResourceType, apiVersion string, resourceDef *types.R
 			for _, err := range errors {
 				errorMsg += fmt.Sprintf("%s\n", err.Error())
 			}
-			return schemaValidationError(errorMsg)
+			diagnostics.AddError("Validation", schemaValidationError(errorMsg).Error())
 		}
 	}
-	return nil
 }
 
 func schemaValidationError(detail string) error {
