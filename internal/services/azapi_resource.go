@@ -33,6 +33,8 @@ var _ resource.ResourceWithConfigure = &AzapiResource{}
 var _ resource.ResourceWithModifyPlan = &AzapiResource{}
 var _ resource.ResourceWithValidateConfig = &AzapiResource{}
 
+//var _ resource.ResourceWithUpgradeState = &AzapiResource{}
+
 type AzapiResource struct {
 	ProviderData *clients.Client
 }
@@ -43,7 +45,7 @@ type AzapiResourceModel struct {
 	ParentID                types.String `tfsdk:"parent_id"`
 	Type                    types.String `tfsdk:"type"`
 	Location                types.String `tfsdk:"location"`
-	Identity                types.Object `tfsdk:"identity"`
+	Identity                types.List   `tfsdk:"identity"`
 	Body                    types.String `tfsdk:"body"`
 	Locks                   types.List   `tfsdk:"locks"`
 	RemovingSpecialChars    types.Bool   `tfsdk:"removing_special_chars"`

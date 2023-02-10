@@ -92,7 +92,7 @@ func FlattenTags(raw interface{}) types.Map {
 }
 
 func ExpandTags(value types.Map) map[string]string {
-	tagsMap := make(map[string]interface{})
+	tagsMap := make(map[string]string)
 	if diags := value.ElementsAs(context.TODO(), &tagsMap, false); diags.HasError() {
 		return nil
 	}

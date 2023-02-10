@@ -921,14 +921,31 @@ provider "azurerm" {
   features {}
 }
 
-resource "azapi_resource" "test" {
-  type      = "Microsoft.Resources/resourceGroups@2022-09-01"
-  name      = "acctestRG-%[1]d"
-  parent_id = "/subscriptions/%[2]s"
 
-  location = "%[3]s"
+resource "azapi_resource" "automation" {
+  type      = "Microsoft.Automation/automationAccounts@2022-08-08"
+  parent_id = "/subscriptions/85b3dbca-5974-4067-9669-67a141095a76/resourceGroups/henglu3"
+  name      = "henglutest1"
+  location  = "west Us"
+  identity {
+    type         =  "SystemAssigned, UserAssigned"
+    identity_ids = ["/subscriptions/85b3dbca-5974-4067-9669-67a141095a76/resourceGroups/henglu3/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hengluuai"]
+  }
+
+  body = jsonencode({
+    properties = {
+      sku = {
+        name = "Basic"
+
+      }
+    }
+  })
+
+  tags = {
+    "key" = "value"
+  }
 }
-`, data.RandomInteger, subscriptionId, data.LocationPrimary)
+`)
 }
 
 // nolint staticcheck
