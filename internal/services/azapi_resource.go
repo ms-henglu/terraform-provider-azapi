@@ -103,10 +103,11 @@ func (r *AzapiResource) Schema(ctx context.Context, request resource.SchemaReque
 			},
 
 			"location": schema.StringAttribute{
-				Optional:      true,
-				Computed:      true,
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					//	location.NormalizeLocation(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 
