@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Azure/terraform-provider-azapi/internal/azure"
-	"github.com/Azure/terraform-provider-azapi/internal/azure/identity"
-	"github.com/Azure/terraform-provider-azapi/internal/azure/location"
-	"github.com/Azure/terraform-provider-azapi/internal/azure/tags"
 	azuretypes "github.com/Azure/terraform-provider-azapi/internal/azure/types"
 	"github.com/Azure/terraform-provider-azapi/internal/clients"
+	"github.com/Azure/terraform-provider-azapi/internal/customtypes"
 	"github.com/Azure/terraform-provider-azapi/internal/locks"
 	myplanmodifier "github.com/Azure/terraform-provider-azapi/internal/planmodifier"
+	"github.com/Azure/terraform-provider-azapi/internal/schema/identity"
+	"github.com/Azure/terraform-provider-azapi/internal/schema/location"
+	"github.com/Azure/terraform-provider-azapi/internal/schema/tags"
 	"github.com/Azure/terraform-provider-azapi/internal/services/parse"
 	"github.com/Azure/terraform-provider-azapi/internal/services/validate"
 	"github.com/Azure/terraform-provider-azapi/internal/tf"
@@ -40,21 +41,21 @@ type AzapiResource struct {
 }
 
 type AzapiResourceModel struct {
-	ID                      types.String `tfsdk:"id"`
-	Name                    types.String `tfsdk:"name"`
-	ParentID                types.String `tfsdk:"parent_id"`
-	Type                    types.String `tfsdk:"type"`
-	Location                types.String `tfsdk:"location"`
-	Identity                types.List   `tfsdk:"identity"`
-	Body                    types.String `tfsdk:"body"`
-	Locks                   types.List   `tfsdk:"locks"`
-	RemovingSpecialChars    types.Bool   `tfsdk:"removing_special_chars"`
-	SchemaValidationEnabled types.Bool   `tfsdk:"schema_validation_enabled"`
-	IgnoreCasing            types.Bool   `tfsdk:"ignore_casing"`
-	IgnoreMissingProperty   types.Bool   `tfsdk:"ignore_missing_property"`
-	ResponseExportValues    types.List   `tfsdk:"response_export_values"`
-	Output                  types.String `tfsdk:"output"`
-	Tags                    types.Map    `tfsdk:"tags"`
+	ID                      types.String              `tfsdk:"id"`
+	Name                    types.String              `tfsdk:"name"`
+	ParentID                types.String              `tfsdk:"parent_id"`
+	Type                    types.String              `tfsdk:"type"`
+	Location                customtypes.LocationValue `tfsdk:"location"`
+	Identity                types.List                `tfsdk:"identity"`
+	Body                    types.String              `tfsdk:"body"`
+	Locks                   types.List                `tfsdk:"locks"`
+	RemovingSpecialChars    types.Bool                `tfsdk:"removing_special_chars"`
+	SchemaValidationEnabled types.Bool                `tfsdk:"schema_validation_enabled"`
+	IgnoreCasing            types.Bool                `tfsdk:"ignore_casing"`
+	IgnoreMissingProperty   types.Bool                `tfsdk:"ignore_missing_property"`
+	ResponseExportValues    types.List                `tfsdk:"response_export_values"`
+	Output                  types.String              `tfsdk:"output"`
+	Tags                    types.Map                 `tfsdk:"tags"`
 }
 
 func (r *AzapiResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
@@ -103,18 +104,15 @@ func (r *AzapiResource) Schema(ctx context.Context, request resource.SchemaReque
 			},
 
 			"location": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				PlanModifiers: []planmodifier.String{
-					//	location.NormalizeLocation(),
-					stringplanmodifier.RequiresReplace(),
-				},
+				Optional:      true,
+				CustomType:    customtypes.LocationType{},
+				PlanModifiers: []planmodifier.String{},
 			},
 
 			"body": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
-				//DiffSuppressFunc: tf.SuppressJsonOrderingDifference,
+				//	CustomType: schemajson.JsonStringType{},
 				PlanModifiers: []planmodifier.String{
 					myplanmodifier.DefaultAttribute(types.StringValue("{}")),
 				},
@@ -296,7 +294,7 @@ func (r *AzapiResource) ModifyPlan(ctx context.Context, request resource.ModifyP
 	if plan.Location.IsNull() && body["location"] == nil && !r.ProviderData.Features.DefaultLocation.IsNull() {
 		if isResourceHasProperty(resourceDef, "location") {
 			if state == nil || location.Normalize(state.Location.ValueString()) != location.Normalize(r.ProviderData.Features.DefaultLocation.String()) {
-				plan.Location = r.ProviderData.Features.DefaultLocation
+				//		plan.Location = r.ProviderData.Features.DefaultLocation
 			}
 		}
 	}
@@ -468,13 +466,15 @@ func (r *AzapiResource) Read(ctx context.Context, request resource.ReadRequest, 
 
 	if bodyMap, ok := responseBody.(map[string]interface{}); ok {
 		model.Tags = tags.FlattenTags(bodyMap["tags"])
+		model.Location = customtypes.NewLocationValue(location.Normalize(model.Location.ValueString()))
 		if location.Normalize(model.Location.ValueString()) != location.Normalize(bodyMap["location"].(string)) {
-			model.Location = types.StringValue(bodyMap["location"].(string))
+			model.Location = customtypes.NewLocationValue(bodyMap["location"].(string))
 		}
 		model.Identity = identity.FlattenIdentity(bodyMap["identity"])
 	}
 	model.Output = types.StringValue(flattenOutput(responseBody, model.ResponseExportValues.Elements()))
 
+	model.Location = customtypes.NewLocationValue(location.Normalize(model.Location.ValueString()))
 	diags := response.State.Set(ctx, model)
 	_ = diags
 }

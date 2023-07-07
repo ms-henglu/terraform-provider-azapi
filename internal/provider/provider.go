@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/Azure/terraform-provider-azapi/internal/schema/tags"
 	"github.com/Azure/terraform-provider-azapi/internal/services"
 	"os"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/terraform-provider-azapi/internal/azure"
-	"github.com/Azure/terraform-provider-azapi/internal/azure/tags"
 	"github.com/Azure/terraform-provider-azapi/internal/clients"
 	"github.com/Azure/terraform-provider-azapi/internal/features"
 	myValidator "github.com/Azure/terraform-provider-azapi/internal/validator"

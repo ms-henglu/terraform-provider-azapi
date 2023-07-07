@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/Azure/terraform-provider-azapi/internal/schema/location"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"os"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Azure/terraform-provider-azapi/internal/acceptance"
 	"github.com/Azure/terraform-provider-azapi/internal/acceptance/check"
-	"github.com/Azure/terraform-provider-azapi/internal/azure/location"
 	"github.com/Azure/terraform-provider-azapi/internal/clients"
 	"github.com/Azure/terraform-provider-azapi/internal/services/parse"
 	"github.com/Azure/terraform-provider-azapi/utils"
@@ -423,27 +423,14 @@ func (GenericResource) ImportIdFunc(tfState *terraform.State) (string, error) {
 
 func (r GenericResource) basic(data acceptance.TestData) string {
 	return fmt.Sprintf(`
-%s
 
-resource "azurerm_automation_account" "test" {
-  name                = "acctest%[2]s"
-  location            = azurerm_resource_group.test.location
-  resource_group_name = azurerm_resource_group.test.name
-  sku_name            = "Basic"
+resource "azapi_resource" "rg" {
+  type      = "Microsoft.Resources/resourceGroups@2020-06-01"
+  parent_id = "/subscriptions/85b3dbca-5974-4067-9669-67a141095a76"
+  name      = "henglu03"
+  location  = "West Europe"
 }
-
-resource "azapi_resource" "test" {
-  type      = "Microsoft.Automation/automationAccounts/certificates@2022-08-08"
-  name      = "acctest%[2]s"
-  parent_id = azurerm_automation_account.test.id
-
-  body = jsonencode({
-    properties = {
-      base64Value = "%[3]s"
-    }
-  })
-}
-`, r.template(data), data.RandomString, testCertBase64)
+`)
 }
 
 func (r GenericResource) requiresImport(data acceptance.TestData) string {
