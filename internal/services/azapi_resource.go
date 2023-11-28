@@ -18,6 +18,7 @@ import (
 	"github.com/Azure/terraform-provider-azapi/internal/tf"
 	myValidator "github.com/Azure/terraform-provider-azapi/internal/validator"
 	"github.com/Azure/terraform-provider-azapi/utils"
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -47,7 +48,7 @@ type AzapiResourceModel struct {
 	Type                    types.String              `tfsdk:"type"`
 	Location                customtypes.LocationValue `tfsdk:"location"`
 	Identity                types.List                `tfsdk:"identity"`
-	Body                    types.String              `tfsdk:"body"`
+	Body                    jsontypes.Normalized      `tfsdk:"body"`
 	Locks                   types.List                `tfsdk:"locks"`
 	RemovingSpecialChars    types.Bool                `tfsdk:"removing_special_chars"`
 	SchemaValidationEnabled types.Bool                `tfsdk:"schema_validation_enabled"`
@@ -110,9 +111,9 @@ func (r *AzapiResource) Schema(ctx context.Context, request resource.SchemaReque
 			},
 
 			"body": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				//	CustomType: schemajson.JsonStringType{},
+				Optional:   true,
+				Computed:   true,
+				CustomType: jsontypes.NormalizedType{},
 				PlanModifiers: []planmodifier.String{
 					myplanmodifier.DefaultAttribute(types.StringValue("{}")),
 				},
@@ -175,6 +176,7 @@ func (r *AzapiResource) Schema(ctx context.Context, request resource.SchemaReque
 
 			"tags": schema.MapAttribute{
 				Optional:    true,
+				Computed:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Map{
 					tags.Validator(),
@@ -436,12 +438,12 @@ func (r *AzapiResource) Read(ctx context.Context, request resource.ReadRequest, 
 				delete(bodyMap, "identity")
 				writeOnlyBody = bodyMap
 			}
-			data, err := json.Marshal(writeOnlyBody)
+			data, err := json.MarshalIndent(writeOnlyBody, "", "  ")
 			if err != nil {
 				response.Diagnostics.AddError("Marshal Error", err.Error())
 				return
 			}
-			model.Body = types.StringValue(string(data))
+			model.Body = jsontypes.NewNormalizedValue(string(data))
 		}
 		model.IgnoreCasing = types.BoolValue(false)
 		model.IgnoreMissingProperty = types.BoolValue(true)
@@ -452,12 +454,12 @@ func (r *AzapiResource) Read(ctx context.Context, request resource.ReadRequest, 
 			IgnoreCasing:          model.IgnoreCasing.ValueBool(),
 			IgnoreMissingProperty: model.IgnoreMissingProperty.ValueBool(),
 		}
-		data, err := json.Marshal(utils.GetUpdatedJson(requestBody, responseBody, option))
+		data, err := json.MarshalIndent(utils.GetUpdatedJson(requestBody, responseBody, option), "", "  ")
 		if err != nil {
 			response.Diagnostics.AddError("Marshal Error", err.Error())
 			return
 		}
-		model.Body = types.StringValue(string(data))
+		model.Body = jsontypes.NewNormalizedValue(string(data))
 	}
 
 	model.Name = types.StringValue(id.Name)
@@ -535,6 +537,7 @@ func (r *AzapiResource) expandBody(model AzapiResourceModel, body map[string]int
 }
 
 func validateDuplicatedDefinition(model AzapiResourceModel, body map[string]interface{}, diagnostics *diag.Diagnostics) {
+	return
 	if !model.Identity.IsNull() && body["identity"] != nil {
 		diagnostics.AddError("Validation", fmt.Errorf("can't specify both property `%[1]s` and `%[1]s` in `body`", "identity").Error())
 	}

@@ -13,6 +13,7 @@ import (
 var (
 	_ = basetypes.StringTypable(&LocationType{})
 	_ = fmt.Stringer(&LocationType{})
+	_ = basetypes.StringValuableWithSemanticEquals(&LocationValue{})
 )
 
 type LocationType struct {

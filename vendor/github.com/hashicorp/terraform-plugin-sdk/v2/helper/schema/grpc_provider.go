@@ -37,6 +37,11 @@ type GRPCProviderServer struct {
 	stopMu   sync.Mutex
 }
 
+func (s *GRPCProviderServer) GetMetadata(ctx context.Context, request *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // mergeStop is called in a goroutine and waits for the global stop signal
 // and propagates cancellation to the passed in ctx/cancel func. The ctx is
 // also passed to this function and waited upon so no goroutine leak is caused.
