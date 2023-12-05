@@ -32,7 +32,8 @@ import (
 
 var _ resource.Resource = &AzapiResource{}
 var _ resource.ResourceWithConfigure = &AzapiResource{}
-var _ resource.ResourceWithModifyPlan = &AzapiResource{}
+
+// var _ resource.ResourceWithModifyPlan = &AzapiResource{}
 var _ resource.ResourceWithValidateConfig = &AzapiResource{}
 
 //var _ resource.ResourceWithUpgradeState = &AzapiResource{}
@@ -242,7 +243,7 @@ func (r *AzapiResource) ValidateConfig(ctx context.Context, request resource.Val
 	}
 }
 
-func (r *AzapiResource) ModifyPlan(ctx context.Context, request resource.ModifyPlanRequest, response *resource.ModifyPlanResponse) {
+func (r *AzapiResource) ModifyPlan1(ctx context.Context, request resource.ModifyPlanRequest, response *resource.ModifyPlanResponse) {
 	if request.Plan.Raw.IsNull() {
 		// If the entire plan is null, the resource is planned for destruction.
 		return
@@ -258,47 +259,12 @@ func (r *AzapiResource) ModifyPlan(ctx context.Context, request resource.ModifyP
 		response.Diagnostics.Append(diags...)
 		return
 	}
-
-	if state == nil || !plan.Identity.Equal(state.Identity) ||
-		!plan.Tags.Equal(state.Tags) ||
-		!plan.ResponseExportValues.Equal(state.ResponseExportValues) ||
-		plan.Body.IsUnknown() ||
-		utils.NormalizeJson(plan.Body.ValueString()) != utils.NormalizeJson(state.Body.ValueString()) {
-		plan.Output = types.StringUnknown()
+	if state == nil {
+		return // This is a new resource, not an update.
 	}
-
-	// body refers other resource, can't be verified during plan
-	if plan.Body.IsUnknown() || plan.Type.IsUnknown() {
-		response.Plan.Set(ctx, plan)
-		return
-	}
-	azureResourceType, apiVersion, err := utils.GetAzureResourceTypeApiVersion(plan.Type.ValueString())
-	if err != nil {
-		response.Diagnostics.AddError("Validation", err.Error())
-		return
-	}
-
-	var body map[string]interface{}
-	err = json.Unmarshal([]byte(plan.Body.ValueString()), &body)
-	if err != nil {
-		response.Diagnostics.AddError("Unmarshal", err.Error())
-		return
-	}
-	resourceDef, _ := azure.GetResourceDefinition(azureResourceType, apiVersion)
-	if plan.Tags.IsNull() && body["tags"] == nil && !r.ProviderData.Features.DefaultTags.IsNull() {
-		if isResourceHasProperty(resourceDef, "tags") {
-			if state == nil || !state.Tags.Equal(r.ProviderData.Features.DefaultTags) {
-				plan.Tags = r.ProviderData.Features.DefaultTags
-			}
-		}
-	}
-
-	if plan.Location.IsNull() && body["location"] == nil && !r.ProviderData.Features.DefaultLocation.IsNull() {
-		if isResourceHasProperty(resourceDef, "location") {
-			if state == nil || location.Normalize(state.Location.ValueString()) != location.Normalize(r.ProviderData.Features.DefaultLocation.String()) {
-				//		plan.Location = r.ProviderData.Features.DefaultLocation
-			}
-		}
+	plan.Output = state.Output
+	if !plan.Location.IsUnknown() && location.Normalize(plan.Location.ValueString()) == location.Normalize(state.Location.ValueString()) {
+		//plan.Location = types.StringValue(location.Normalize(plan.Location.ValueString()))
 	}
 
 	response.Plan.Set(ctx, plan)
@@ -387,7 +353,7 @@ func (r *AzapiResource) CreateUpdate(ctx context.Context, plan tfsdk.Plan, state
 	readResponse := resource.ReadResponse{
 		State: *state,
 	}
-	r.Read(ctx, resource.ReadRequest{
+	r.Read(context.WithValue(ctx, "create", "true"), resource.ReadRequest{
 		State: *state,
 	}, &readResponse)
 	*state = readResponse.State
@@ -466,17 +432,29 @@ func (r *AzapiResource) Read(ctx context.Context, request resource.ReadRequest, 
 	model.ParentID = types.StringValue(id.ParentId)
 	model.Type = types.StringValue(fmt.Sprintf("%s@%s", id.AzureResourceType, id.ApiVersion))
 
+	locationFromResponse := ""
 	if bodyMap, ok := responseBody.(map[string]interface{}); ok {
 		model.Tags = tags.FlattenTags(bodyMap["tags"])
-		model.Location = customtypes.NewLocationValue(location.Normalize(model.Location.ValueString()))
-		if location.Normalize(model.Location.ValueString()) != location.Normalize(bodyMap["location"].(string)) {
-			model.Location = customtypes.NewLocationValue(bodyMap["location"].(string))
+		//model.Location = types.StringValue(location.Normalize(model.Location.ValueString()))
+		//if location.Normalize(model.Location.ValueString()) != location.Normalize(bodyMap["location"].(string)) {
+		//	model.Location = types.StringValue(bodyMap["location"].(string))
+		//}
+		if locationValue, ok := bodyMap["location"].(string); ok {
+			locationFromResponse = locationValue
 		}
 		model.Identity = identity.FlattenIdentity(bodyMap["identity"])
 	}
 	model.Output = types.StringValue(flattenOutput(responseBody, model.ResponseExportValues.Elements()))
 
-	model.Location = customtypes.NewLocationValue(location.Normalize(model.Location.ValueString()))
+	isCreate := false
+	if create, ok := ctx.Value("create").(string); ok && create == "true" {
+		isCreate = true
+	}
+	if !isCreate {
+		model.Location = customtypes.NewLocationValue(locationFromResponse)
+	}
+
+	//model.Location = types.StringValue(location.Normalize(model.Location.ValueString()))
 	diags := response.State.Set(ctx, model)
 	_ = diags
 }
