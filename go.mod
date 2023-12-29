@@ -1,5 +1,7 @@
 module github.com/Azure/terraform-provider-azapi
 
+replace github.com/hashicorp/terraform-plugin-framework => /Users/luheng/go/src/github.com/hashicorp/terraform-plugin-framework
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0

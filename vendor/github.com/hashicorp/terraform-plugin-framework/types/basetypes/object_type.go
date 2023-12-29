@@ -72,7 +72,7 @@ func (o ObjectType) ValueFromTerraform(ctx context.Context, in tftypes.Value) (a
 	if in.Type() == nil {
 		return NewObjectNull(o.AttrTypes), nil
 	}
-	if !in.Type().Equal(o.TerraformType(ctx)) {
+	if !in.Type().UsableAs(o.TerraformType(ctx)) {
 		return nil, fmt.Errorf("expected %s, got %s", o.TerraformType(ctx), in.Type())
 	}
 	if !in.IsKnown() {
