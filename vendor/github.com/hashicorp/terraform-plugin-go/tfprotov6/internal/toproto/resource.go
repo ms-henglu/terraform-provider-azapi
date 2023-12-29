@@ -5,6 +5,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6/internal/tfplugin6"
 )
 
+func GetMetadata_ResourceMetadata(in *tfprotov6.ResourceMetadata) *tfplugin6.GetMetadata_ResourceMetadata {
+	if in == nil {
+		return nil
+	}
+
+	return &tfplugin6.GetMetadata_ResourceMetadata{
+		TypeName: in.TypeName,
+	}
+}
+
 func ValidateResourceConfig_Request(in *tfprotov6.ValidateResourceConfigRequest) (*tfplugin6.ValidateResourceConfig_Request, error) {
 	resp := &tfplugin6.ValidateResourceConfig_Request{
 		TypeName: in.TypeName,
@@ -101,7 +111,8 @@ func PlanResourceChange_Request(in *tfprotov6.PlanResourceChangeRequest) (*tfplu
 
 func PlanResourceChange_Response(in *tfprotov6.PlanResourceChangeResponse) (*tfplugin6.PlanResourceChange_Response, error) {
 	resp := &tfplugin6.PlanResourceChange_Response{
-		PlannedPrivate: in.PlannedPrivate,
+		PlannedPrivate:   in.PlannedPrivate,
+		LegacyTypeSystem: in.UnsafeToUseLegacyTypeSystem, //nolint:staticcheck
 	}
 	requiresReplace, err := AttributePaths(in.RequiresReplace)
 	if err != nil {
@@ -141,7 +152,8 @@ func ApplyResourceChange_Request(in *tfprotov6.ApplyResourceChangeRequest) (*tfp
 
 func ApplyResourceChange_Response(in *tfprotov6.ApplyResourceChangeResponse) (*tfplugin6.ApplyResourceChange_Response, error) {
 	resp := &tfplugin6.ApplyResourceChange_Response{
-		Private: in.Private,
+		Private:          in.Private,
+		LegacyTypeSystem: in.UnsafeToUseLegacyTypeSystem, //nolint:staticcheck
 	}
 	diags, err := Diagnostics(in.Diagnostics)
 	if err != nil {
