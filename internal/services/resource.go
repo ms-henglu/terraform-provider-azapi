@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"log"
 	"strings"
 
@@ -101,6 +103,28 @@ func flattenOutput(responseBody interface{}, paths []string) string {
 	}
 	outputJson, _ := json.Marshal(output)
 	return string(outputJson)
+}
+
+func flattenOutputPayload(responseBody interface{}, paths []string) attr.Value {
+	for _, path := range paths {
+		if path == "*" {
+			if v, ok := responseBody.(string); ok {
+				return basetypes.NewStringValue(v)
+			}
+			return utils.ToAttrValue(responseBody)
+		}
+	}
+
+	var output interface{}
+	output = make(map[string]interface{})
+	for _, path := range paths {
+		part := utils.ExtractObject(responseBody, path)
+		if part == nil {
+			continue
+		}
+		output = utils.MergeObject(output, part)
+	}
+	return utils.ToAttrValue(output)
 }
 
 func AsStringList(input types.List) []string {

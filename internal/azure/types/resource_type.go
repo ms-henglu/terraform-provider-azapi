@@ -15,6 +15,16 @@ type ResourceType struct {
 	Flags              []ResourceTypeFlag
 }
 
+func (t *ResourceType) TypeOfProperty(current interface{}, propertyName string) *TypeBase {
+	if t == nil {
+		return nil
+	}
+	if t.Body != nil && t.Body.Type != nil {
+		return (*t.Body.Type).TypeOfProperty(current, propertyName)
+	}
+	return nil
+}
+
 func (t *ResourceType) GetWriteOnly(body interface{}) interface{} {
 	if t == nil || body == nil {
 		return nil

@@ -12,6 +12,10 @@ type StringLiteralType struct {
 	Value string `json:"Value"`
 }
 
+func (t *StringLiteralType) TypeOfProperty(i interface{}, s string) *TypeBase {
+	return nil
+}
+
 func (t *StringLiteralType) GetWriteOnly(i interface{}) interface{} {
 	if t == nil || i == nil {
 		return nil

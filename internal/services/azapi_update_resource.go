@@ -26,18 +26,20 @@ import (
 )
 
 type AzapiUpdateResourceModel struct {
-	ID                    types.String `tfsdk:"id"`
-	Name                  types.String `tfsdk:"name"`
-	ParentID              types.String `tfsdk:"parent_id"`
-	ResourceID            types.String `tfsdk:"resource_id"`
-	Type                  types.String `tfsdk:"type"`
-	Body                  types.String `tfsdk:"body"`
-	IgnoreCasing          types.Bool   `tfsdk:"ignore_casing"`
-	IgnoreBodyChanges     types.List   `tfsdk:"ignore_body_changes"`
-	IgnoreMissingProperty types.Bool   `tfsdk:"ignore_missing_property"`
-	ResponseExportValues  types.List   `tfsdk:"response_export_values"`
-	Locks                 types.List   `tfsdk:"locks"`
-	Output                types.String `tfsdk:"output"`
+	ID                    types.String  `tfsdk:"id"`
+	Name                  types.String  `tfsdk:"name"`
+	ParentID              types.String  `tfsdk:"parent_id"`
+	ResourceID            types.String  `tfsdk:"resource_id"`
+	Type                  types.String  `tfsdk:"type"`
+	Body                  types.String  `tfsdk:"body"`
+	Payload               types.Dynamic `tfsdk:"payload"`
+	IgnoreCasing          types.Bool    `tfsdk:"ignore_casing"`
+	IgnoreBodyChanges     types.List    `tfsdk:"ignore_body_changes"`
+	IgnoreMissingProperty types.Bool    `tfsdk:"ignore_missing_property"`
+	ResponseExportValues  types.List    `tfsdk:"response_export_values"`
+	Locks                 types.List    `tfsdk:"locks"`
+	Output                types.String  `tfsdk:"output"`
+	OutputPayload         types.Dynamic `tfsdk:"output_payload"`
 }
 
 type AzapiUpdateResource struct {
@@ -122,6 +124,10 @@ func (r *AzapiUpdateResource) Schema(ctx context.Context, request resource.Schem
 				},
 			},
 
+			"payload": schema.DynamicAttribute{
+				Optional: true,
+			},
+
 			"ignore_body_changes": schema.ListAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
@@ -161,6 +167,10 @@ func (r *AzapiUpdateResource) Schema(ctx context.Context, request resource.Schem
 			"output": schema.StringAttribute{
 				Computed: true,
 			},
+
+			"output_payload": schema.DynamicAttribute{
+				Computed: true,
+			},
 		},
 	}
 }
@@ -173,6 +183,11 @@ func (r *AzapiUpdateResource) ValidateConfig(ctx context.Context, request resour
 
 	if config == nil {
 		return
+	}
+
+	// can't specify both body and payload
+	if !config.Body.IsNull() && !config.Payload.IsNull() {
+		response.Diagnostics.AddError("Invalid config", "can't specify both body and payload")
 	}
 
 	if config.Name.IsNull() && !config.ParentID.IsNull() {
@@ -220,11 +235,10 @@ func (r *AzapiUpdateResource) ModifyPlan(ctx context.Context, request resource.M
 		return
 	}
 
-	if state == nil || !plan.ResponseExportValues.Equal(state.ResponseExportValues) {
+	if state == nil || !plan.ResponseExportValues.Equal(state.ResponseExportValues) || utils.NormalizeJson(plan.Body.ValueString()) != utils.NormalizeJson(state.Body.ValueString()) || !plan.Payload.Equal(state.Payload) {
 		plan.Output = types.StringUnknown()
-	}
-	if state == nil || utils.NormalizeJson(plan.Body.ValueString()) != utils.NormalizeJson(state.Body.ValueString()) {
-		plan.Output = types.StringUnknown()
+		plan.OutputPayload = basetypes.NewDynamicUnknown()
+		response.Diagnostics.Append(response.Plan.Set(ctx, plan)...)
 	}
 }
 
@@ -271,10 +285,23 @@ func (r *AzapiUpdateResource) CreateUpdate(ctx context.Context, plan tfsdk.Plan,
 	}
 
 	var requestBody interface{}
-	err = json.Unmarshal([]byte(model.Body.ValueString()), &requestBody)
-	if err != nil {
-		diagnostics.AddError("Invalid configuration", fmt.Sprintf(`The argument "body" is invalid, value: %q, error: %s`, model.Body.ValueString(), err.Error()))
-		return
+	switch {
+	case !model.Payload.IsNull():
+		out, err := expandPayload(model.Payload)
+		if err != nil {
+			diagnostics.AddError("Invalid payload", err.Error())
+			return
+		}
+		requestBody = out
+	case !model.Body.IsNull():
+		bodyValueString := model.Body.ValueString()
+		err := json.Unmarshal([]byte(bodyValueString), &requestBody)
+		if err != nil {
+			diagnostics.AddError("Invalid JSON string", fmt.Sprintf(`The argument "body" is invalid: value: %s, err: %+v`, model.Body.ValueString(), err))
+			return
+		}
+	default:
+		requestBody = map[string]interface{}{}
 	}
 
 	requestBody = utils.MergeObject(existing, requestBody)
@@ -307,6 +334,7 @@ func (r *AzapiUpdateResource) CreateUpdate(ctx context.Context, plan tfsdk.Plan,
 	model.ParentID = basetypes.NewStringValue(id.ParentId)
 	model.ResourceID = basetypes.NewStringValue(id.AzureResourceId)
 	model.Output = basetypes.NewStringValue(flattenOutput(responseBody, AsStringList(model.ResponseExportValues)))
+	model.OutputPayload = types.DynamicValue(flattenOutputPayload(responseBody, AsStringList(model.ResponseExportValues)))
 
 	diagnostics.Append(state.Set(ctx, model)...)
 }
@@ -342,12 +370,27 @@ func (r *AzapiUpdateResource) Read(ctx context.Context, request resource.ReadReq
 	state.ResourceID = basetypes.NewStringValue(id.AzureResourceId)
 	state.Type = basetypes.NewStringValue(fmt.Sprintf("%s@%s", id.AzureResourceType, id.ApiVersion))
 
-	bodyJson := model.Body.ValueString()
-	var requestBody interface{}
-	err = json.Unmarshal([]byte(bodyJson), &requestBody)
-	if err != nil && !model.Body.IsNull() {
-		response.Diagnostics.AddError("Invalid configuration", fmt.Sprintf(`The argument "body" is invalid, value: %q, error: %s`, bodyJson, err.Error()))
-		return
+	var requestBody map[string]interface{}
+	var useBody bool
+	switch {
+	case !model.Payload.IsNull():
+		useBody = false
+		out, err := expandPayload(model.Payload)
+		if err != nil {
+			response.Diagnostics.AddError("Invalid payload", err.Error())
+			return
+		}
+		requestBody = out
+	case !model.Body.IsNull():
+		useBody = true
+		bodyValueString := model.Body.ValueString()
+		err := json.Unmarshal([]byte(bodyValueString), &requestBody)
+		if err != nil {
+			response.Diagnostics.AddError("Invalid JSON string", fmt.Sprintf(`The argument "body" is invalid: value: %s, err: %+v`, model.Body.ValueString(), err))
+			return
+		}
+	default:
+		requestBody = map[string]interface{}{}
 	}
 
 	if out, err := overrideWithPaths(responseBody, requestBody, AsStringList(model.IgnoreBodyChanges)); err == nil {
@@ -363,13 +406,20 @@ func (r *AzapiUpdateResource) Read(ctx context.Context, request resource.ReadReq
 	}
 	body := utils.UpdateObject(requestBody, responseBody, option)
 
-	data, err := json.Marshal(body)
-	if err != nil {
-		response.Diagnostics.AddError("Invalid body", err.Error())
-		return
+	if useBody {
+		data, err := json.Marshal(body)
+		if err != nil {
+			response.Diagnostics.AddError("Invalid body", err.Error())
+			return
+		}
+		state.Body = types.StringValue(string(data))
+	} else {
+		payload := utils.ToAttrValue(body)
+		state.Payload = basetypes.NewDynamicValue(payload)
 	}
-	state.Body = basetypes.NewStringValue(string(data))
+
 	state.Output = basetypes.NewStringValue(flattenOutput(responseBody, AsStringList(model.ResponseExportValues)))
+	state.OutputPayload = types.DynamicValue(flattenOutputPayload(responseBody, AsStringList(model.ResponseExportValues)))
 
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }

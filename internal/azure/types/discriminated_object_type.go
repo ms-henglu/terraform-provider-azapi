@@ -16,6 +16,34 @@ type DiscriminatedObjectType struct {
 	Elements       map[string]*TypeReference
 }
 
+func (t *DiscriminatedObjectType) TypeOfProperty(current interface{}, propertyName string) *TypeBase {
+	if t == nil {
+		return nil
+	}
+	if def, ok := t.BaseProperties[propertyName]; ok {
+		if def.Type != nil {
+			return def.Type.Type
+		}
+	}
+
+	bodyMap, ok := current.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	if _, ok := bodyMap[t.Discriminator]; !ok {
+		return nil
+	}
+
+	if discriminator, ok := bodyMap[t.Discriminator].(string); ok {
+		if t.Elements[discriminator] != nil && t.Elements[discriminator].Type != nil {
+			return (*t.Elements[discriminator].Type).TypeOfProperty(current, propertyName)
+		}
+	}
+
+	return nil
+}
+
 func (t *DiscriminatedObjectType) GetWriteOnly(body interface{}) interface{} {
 	if t == nil || body == nil {
 		return []error{}

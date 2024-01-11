@@ -15,6 +15,10 @@ type ResourceFunctionType struct {
 	Output       *TypeReference
 }
 
+func (t ResourceFunctionType) TypeOfProperty(_ interface{}, _ string) *TypeBase {
+	return nil
+}
+
 func (t ResourceFunctionType) AsTypeBase() *TypeBase {
 	typeBase := TypeBase(t)
 	return &typeBase

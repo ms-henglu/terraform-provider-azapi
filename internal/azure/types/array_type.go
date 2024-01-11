@@ -14,6 +14,13 @@ type ArrayType struct {
 	ItemType *TypeReference
 }
 
+func (t *ArrayType) TypeOfProperty(_ interface{}, s string) *TypeBase {
+	if t == nil || s != ArrayItem {
+		return nil
+	}
+	return t.ItemType.Type
+}
+
 func (t *ArrayType) GetWriteOnly(body interface{}) interface{} {
 	if t == nil || body == nil {
 		return nil

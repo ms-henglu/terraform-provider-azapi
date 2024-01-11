@@ -25,16 +25,18 @@ import (
 )
 
 type ActionResourceModel struct {
-	ID                   types.String `tfsdk:"id"`
-	Type                 types.String `tfsdk:"type"`
-	ResourceId           types.String `tfsdk:"resource_id"`
-	Action               types.String `tfsdk:"action"`
-	Method               types.String `tfsdk:"method"`
-	Body                 types.String `tfsdk:"body"`
-	When                 types.String `tfsdk:"when"`
-	Locks                types.List   `tfsdk:"locks"`
-	ResponseExportValues types.List   `tfsdk:"response_export_values"`
-	Output               types.String `tfsdk:"output"`
+	ID                   types.String  `tfsdk:"id"`
+	Type                 types.String  `tfsdk:"type"`
+	ResourceId           types.String  `tfsdk:"resource_id"`
+	Action               types.String  `tfsdk:"action"`
+	Method               types.String  `tfsdk:"method"`
+	Body                 types.String  `tfsdk:"body"`
+	Payload              types.Dynamic `tfsdk:"payload"`
+	When                 types.String  `tfsdk:"when"`
+	Locks                types.List    `tfsdk:"locks"`
+	ResponseExportValues types.List    `tfsdk:"response_export_values"`
+	Output               types.String  `tfsdk:"output"`
+	OutputPayload        types.Dynamic `tfsdk:"output_payload"`
 }
 
 type ActionResource struct {
@@ -44,6 +46,7 @@ type ActionResource struct {
 var _ resource.Resource = &ActionResource{}
 var _ resource.ResourceWithConfigure = &ActionResource{}
 var _ resource.ResourceWithModifyPlan = &ActionResource{}
+var _ resource.ResourceWithValidateConfig = &ActionResource{}
 
 func (r *ActionResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
 	if v, ok := request.ProviderData.(*clients.Client); ok {
@@ -113,6 +116,10 @@ func (r *ActionResource) Schema(ctx context.Context, request resource.SchemaRequ
 				},
 			},
 
+			"payload": schema.DynamicAttribute{
+				Optional: true,
+			},
+
 			"when": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
@@ -141,7 +148,28 @@ func (r *ActionResource) Schema(ctx context.Context, request resource.SchemaRequ
 			"output": schema.StringAttribute{
 				Computed: true,
 			},
+
+			"output_payload": schema.DynamicAttribute{
+				Computed: true,
+			},
 		},
+	}
+}
+
+func (r *ActionResource) ValidateConfig(ctx context.Context, request resource.ValidateConfigRequest, response *resource.ValidateConfigResponse) {
+	var config *ActionResourceModel
+	if response.Diagnostics.Append(request.Config.Get(ctx, &config)...); response.Diagnostics.HasError() {
+		return
+	}
+	// destroy doesn't need to modify plan
+	if config == nil {
+		return
+	}
+
+	// can't specify both body and payload
+	if !config.Body.IsNull() && !config.Payload.IsNull() {
+		response.Diagnostics.AddError("Invalid config", "can't specify both body and payload")
+		return
 	}
 }
 
@@ -159,8 +187,10 @@ func (r *ActionResource) ModifyPlan(ctx context.Context, request resource.Modify
 		return
 	}
 
-	if state == nil || !plan.ResponseExportValues.Equal(state.ResponseExportValues) {
+	if state == nil || !plan.ResponseExportValues.Equal(state.ResponseExportValues) || utils.NormalizeJson(plan.Body.ValueString()) != utils.NormalizeJson(state.Body.ValueString()) || !plan.Payload.Equal(state.Payload) {
 		plan.Output = types.StringUnknown()
+		plan.OutputPayload = basetypes.NewDynamicUnknown()
+		response.Diagnostics.Append(response.Plan.Set(ctx, plan)...)
 	}
 }
 
@@ -208,14 +238,24 @@ func (r *ActionResource) Action(ctx context.Context, model ActionResourceModel, 
 		return
 	}
 
-	body := model.Body.ValueString()
 	var requestBody interface{}
-	if body != "" {
-		err = json.Unmarshal([]byte(body), &requestBody)
+	switch {
+	case !model.Payload.IsNull():
+		out, err := expandPayload(model.Payload)
 		if err != nil {
-			diagnostics.AddError("Invalid configuration", fmt.Sprintf(`The argument "body" is invalid, value: %q, error: %s`, body, err.Error()))
+			diagnostics.AddError("Invalid payload", err.Error())
 			return
 		}
+		requestBody = out
+	case !model.Body.IsNull():
+		bodyValueString := model.Body.ValueString()
+		err := json.Unmarshal([]byte(bodyValueString), &requestBody)
+		if err != nil {
+			diagnostics.AddError("Invalid JSON string", fmt.Sprintf(`The argument "body" is invalid: value: %s, err: %+v`, model.Body.ValueString(), err))
+			return
+		}
+	default:
+		requestBody = map[string]interface{}{}
 	}
 
 	for _, id := range AsStringList(model.Locks) {
@@ -236,6 +276,7 @@ func (r *ActionResource) Action(ctx context.Context, model ActionResourceModel, 
 	}
 	model.ID = basetypes.NewStringValue(resourceId)
 	model.Output = basetypes.NewStringValue(flattenOutput(responseBody, AsStringList(model.ResponseExportValues)))
+	model.OutputPayload = types.DynamicValue(flattenOutputPayload(responseBody, AsStringList(model.ResponseExportValues)))
 
 	diagnostics.Append(state.Set(ctx, model)...)
 }

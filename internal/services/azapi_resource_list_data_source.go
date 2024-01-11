@@ -17,11 +17,12 @@ import (
 )
 
 type ResourceListDataSourceModel struct {
-	ID                   types.String `tfsdk:"id"`
-	Type                 types.String `tfsdk:"type"`
-	ParentID             types.String `tfsdk:"parent_id"`
-	ResponseExportValues types.List   `tfsdk:"response_export_values"`
-	Output               types.String `tfsdk:"output"`
+	ID                   types.String  `tfsdk:"id"`
+	Type                 types.String  `tfsdk:"type"`
+	ParentID             types.String  `tfsdk:"parent_id"`
+	ResponseExportValues types.List    `tfsdk:"response_export_values"`
+	Output               types.String  `tfsdk:"output"`
+	OutputPayload        types.Dynamic `tfsdk:"output_payload"`
 }
 
 type ResourceListDataSource struct {
@@ -73,6 +74,10 @@ func (r *ResourceListDataSource) Schema(ctx context.Context, request datasource.
 			"output": schema.StringAttribute{
 				Computed: true,
 			},
+
+			"output_payload": schema.DynamicAttribute{
+				Computed: true,
+			},
 		},
 	}
 }
@@ -100,6 +105,7 @@ func (r *ResourceListDataSource) Read(ctx context.Context, request datasource.Re
 
 	model.ID = basetypes.NewStringValue(listUrl)
 	model.Output = basetypes.NewStringValue(flattenOutput(responseBody, AsStringList(model.ResponseExportValues)))
+	model.OutputPayload = types.DynamicValue(flattenOutputPayload(responseBody, AsStringList(model.ResponseExportValues)))
 
 	response.Diagnostics.Append(response.State.Set(ctx, &model)...)
 }

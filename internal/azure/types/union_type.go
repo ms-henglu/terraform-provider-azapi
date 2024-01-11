@@ -13,6 +13,21 @@ type UnionType struct {
 	Elements []*TypeReference
 }
 
+func (t *UnionType) TypeOfProperty(i interface{}, s string) *TypeBase {
+	if t == nil {
+		return nil
+	}
+	for _, element := range t.Elements {
+		if element.Type == nil {
+			continue
+		}
+		if result := (*element.Type).TypeOfProperty(i, s); result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
 func (t *UnionType) GetWriteOnly(body interface{}) interface{} {
 	if t == nil || body == nil {
 		return nil

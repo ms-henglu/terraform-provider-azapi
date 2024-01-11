@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Azure/terraform-provider-azapi/internal/azure/types"
 	"regexp"
 	"strings"
 )
@@ -61,6 +62,26 @@ func MergeObject(old interface{}, new interface{}) interface{} {
 type UpdateJsonOption struct {
 	IgnoreCasing          bool
 	IgnoreMissingProperty bool
+	Type                  *types.TypeBase
+}
+
+func AreSameItems(a interface{}, b interface{}) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	aName := ""
+	if aMap, ok := a.(map[string]interface{}); ok {
+		if aMap["name"] != nil {
+			aName = aMap["name"].(string)
+		}
+	}
+	bName := ""
+	if bMap, ok := b.(map[string]interface{}); ok {
+		if bMap["name"] != nil {
+			bName = bMap["name"].(string)
+		}
+	}
+	return aName == bName && aName != ""
 }
 
 // UpdateObject is used to get an updated object which has same schema as old, but with new value
@@ -72,7 +93,15 @@ func UpdateObject(old interface{}, new interface{}, option UpdateJsonOption) int
 			for key, value := range oldValue {
 				switch {
 				case newMap[key] != nil:
-					res[key] = UpdateObject(value, newMap[key], option)
+					var propertyType *types.TypeBase
+					if option.Type != nil {
+						propertyType = (*option.Type).TypeOfProperty(old, key)
+					}
+					res[key] = UpdateObject(value, newMap[key], UpdateJsonOption{
+						IgnoreCasing:          option.IgnoreCasing,
+						IgnoreMissingProperty: option.IgnoreMissingProperty,
+						Type:                  propertyType,
+					})
 				case option.IgnoreMissingProperty || isZeroValue(value):
 					res[key] = value
 				}
@@ -82,7 +111,30 @@ func UpdateObject(old interface{}, new interface{}, option UpdateJsonOption) int
 	case []interface{}:
 		if newArr, ok := new.([]interface{}); ok {
 			if len(oldValue) != len(newArr) {
-				return newArr
+				out := make([]interface{}, 0)
+				newArrAdded := make([]bool, len(newArr))
+				for _, o := range oldValue {
+					for index, n := range newArr {
+						if !newArrAdded[index] && AreSameItems(o, n) {
+							newArrAdded[index] = true
+							out = append(out, UpdateObject(o, n, option))
+							break
+						}
+					}
+				}
+				var itemType *types.TypeBase
+				if option.Type != nil {
+					itemType = (*option.Type).TypeOfProperty(old, types.ArrayItem)
+				}
+				for index, n := range newArr {
+					if !newArrAdded[index] {
+						if itemType != nil {
+							n = (*itemType).GetWriteOnly(n)
+						}
+						out = append(out, n)
+					}
+				}
+				return out
 			}
 			res := make([]interface{}, 0)
 			for index := range oldValue {

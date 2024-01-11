@@ -45,6 +45,10 @@ type BuiltInType struct {
 	Kind BuiltInTypeKind `json:"Kind"`
 }
 
+func (t *BuiltInType) TypeOfProperty(_ interface{}, _ string) *TypeBase {
+	return nil
+}
+
 func (t *BuiltInType) GetWriteOnly(body interface{}) interface{} {
 	if t == nil || body == nil {
 		return nil

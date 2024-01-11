@@ -15,6 +15,18 @@ type ObjectType struct {
 	AdditionalProperties *TypeReference
 }
 
+func (t *ObjectType) TypeOfProperty(_ interface{}, propertyName string) *TypeBase {
+	if t == nil {
+		return nil
+	}
+	if def, ok := t.Properties[propertyName]; ok {
+		if def.Type != nil {
+			return def.Type.Type
+		}
+	}
+	return nil
+}
+
 func (t *ObjectType) GetWriteOnly(body interface{}) interface{} {
 	if t == nil || body == nil {
 		return nil

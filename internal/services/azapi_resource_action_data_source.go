@@ -18,14 +18,16 @@ import (
 )
 
 type ResourceActionDataSourceModel struct {
-	ID                   types.String `tfsdk:"id"`
-	ResourceID           types.String `tfsdk:"resource_id"`
-	Type                 types.String `tfsdk:"type"`
-	Action               types.String `tfsdk:"action"`
-	Method               types.String `tfsdk:"method"`
-	Body                 types.String `tfsdk:"body"`
-	ResponseExportValues types.List   `tfsdk:"response_export_values"`
-	Output               types.String `tfsdk:"output"`
+	ID                   types.String  `tfsdk:"id"`
+	ResourceID           types.String  `tfsdk:"resource_id"`
+	Type                 types.String  `tfsdk:"type"`
+	Action               types.String  `tfsdk:"action"`
+	Method               types.String  `tfsdk:"method"`
+	Body                 types.String  `tfsdk:"body"`
+	Payload              types.Dynamic `tfsdk:"payload"`
+	ResponseExportValues types.List    `tfsdk:"response_export_values"`
+	Output               types.String  `tfsdk:"output"`
+	OutputPayload        types.Dynamic `tfsdk:"output_payload"`
 }
 
 type ResourceActionDataSource struct {
@@ -34,6 +36,7 @@ type ResourceActionDataSource struct {
 
 var _ datasource.DataSource = &ResourceActionDataSource{}
 var _ datasource.DataSourceWithConfigure = &ResourceActionDataSource{}
+var _ datasource.DataSourceWithValidateConfig = &ResourceActionDataSource{}
 
 func (r *ResourceActionDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
 	if v, ok := request.ProviderData.(*clients.Client); ok {
@@ -85,6 +88,10 @@ func (r *ResourceActionDataSource) Schema(ctx context.Context, request datasourc
 				},
 			},
 
+			"payload": schema.DynamicAttribute{
+				Optional: true,
+			},
+
 			"response_export_values": schema.ListAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
@@ -96,7 +103,28 @@ func (r *ResourceActionDataSource) Schema(ctx context.Context, request datasourc
 			"output": schema.StringAttribute{
 				Computed: true,
 			},
+
+			"output_payload": schema.DynamicAttribute{
+				Computed: true,
+			},
 		},
+	}
+}
+
+func (r *ResourceActionDataSource) ValidateConfig(ctx context.Context, request datasource.ValidateConfigRequest, response *datasource.ValidateConfigResponse) {
+	var config *ResourceActionDataSourceModel
+	if response.Diagnostics.Append(request.Config.Get(ctx, &config)...); response.Diagnostics.HasError() {
+		return
+	}
+	// destroy doesn't need to modify plan
+	if config == nil {
+		return
+	}
+
+	// can't specify both body and payload
+	if !config.Body.IsNull() && !config.Payload.IsNull() {
+		response.Diagnostics.AddError("Invalid config", "can't specify both body and payload")
+		return
 	}
 }
 
@@ -112,14 +140,24 @@ func (r *ResourceActionDataSource) Read(ctx context.Context, request datasource.
 		return
 	}
 
-	body := model.Body.ValueString()
 	var requestBody interface{}
-	if body != "" {
-		err := json.Unmarshal([]byte(body), &requestBody)
+	switch {
+	case !model.Payload.IsNull():
+		out, err := expandPayload(model.Payload)
 		if err != nil {
-			response.Diagnostics.AddError("Invalid configuration", fmt.Sprintf(`The argument "body" is invalid, value: %q, error: %s`, body, err.Error()))
+			response.Diagnostics.AddError("Invalid payload", err.Error())
 			return
 		}
+		requestBody = out
+	case !model.Body.IsNull():
+		bodyValueString := model.Body.ValueString()
+		err := json.Unmarshal([]byte(bodyValueString), &requestBody)
+		if err != nil {
+			response.Diagnostics.AddError("Invalid JSON string", fmt.Sprintf(`The argument "body" is invalid: value: %s, err: %+v`, model.Body.ValueString(), err))
+			return
+		}
+	default:
+		requestBody = map[string]interface{}{}
 	}
 
 	method := model.Method.ValueString()
@@ -136,6 +174,7 @@ func (r *ResourceActionDataSource) Read(ctx context.Context, request datasource.
 
 	model.ID = basetypes.NewStringValue(id.ID())
 	model.Output = basetypes.NewStringValue(flattenOutput(responseBody, AsStringList(model.ResponseExportValues)))
+	model.OutputPayload = types.DynamicValue(flattenOutputPayload(responseBody, AsStringList(model.ResponseExportValues)))
 
 	response.Diagnostics.Append(response.State.Set(ctx, &model)...)
 }
